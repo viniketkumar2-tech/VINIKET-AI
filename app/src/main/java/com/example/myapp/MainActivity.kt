@@ -11,7 +11,7 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.widget.*
-import android.net.Uri
+import android.net.Uriu
 import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import java.util.Locale
@@ -151,70 +151,71 @@ class MainActivity : AppCompatActivity() {
             "hello" in q || "hi" in q ->
                 "Hello! I am VINIKET AI. How can I help you?"
 
-            "your name" in q || "who are you" in q ->
-                "I am VINIKET AI, your personal voice assistant."
+            "your name" in q || "w
+            ho are you" in q ->
+    "I am VINIKET AI, your personal voice assistant."
 
-            "time" in q ->
-                "The time is " +
-                    java.text.SimpleDateFormat(
-                        "h:mm a", Locale.getDefault()
-                    ).format(java.util.Date())
+"time" in q ->
+    "The time is " +
+        java.text.SimpleDateFormat(
+            "h:mm a", Locale.getDefault()
+        ).format(java.util.Date())
 
-            "date" in q ->
-                "Today is " +
-                    java.text.SimpleDateFormat(
-                        "EEEE, d MMMM yyyy", Locale.getDefault()
-                    ).format(java.util.Date())
+"date" in q ->
+    "Today is " +
+        java.text.SimpleDateFormat(
+            "EEEE, d MMMM yyyy", Locale.getDefault()
+        ).format(java.util.Date())
 
-            "open youtube" in q -> {
-                openWeb("https://www.youtube.com")
-                "Opening YouTube."
-            }
+"open youtube" in q -> {
+    openWeb("https://www.youtube.com")
+    "Opening YouTube."
+}
 
-            "open google" in q -> {
-                openWeb("https://www.google.com")
-                "Opening Google."
-            }
+"open google" in q -> {
+    openWeb("https://www.google.com")
+    "Opening Google."
+}
 
-            else -> {
-                status.text = "Searching the web for: $text"
-                openWeb(
-                    "https://www.google.com/search?q=" + Uri.encode(text)
-                )
-                "I am searching the web for your question."
-            }
-        }
+else -> {
+    status.text = "Searching the web for: $text"
+    openWeb(
+        "https://www.google.com/search?q=" + Uri.encode(text)
+    )
+    "I am searching the web for your question."
+}
+}
 
-        status.text = reply
-        if (ttsReady) {
-            tts.speak(reply, TextToSpeech.QUEUE_FLUSH, null, "viniket_reply")
-        }
+status.text = reply
+if (ttsReady) {
+    tts.speak(reply, TextToSpeech.QUEUE_FLUSH, null, "viniket_reply")
+}
+}
+
+private fun openWeb(url: String) {
+    try {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    } catch (e: Exception) {
+        status.text = "Unable to open the website."
     }
+}
 
-    private fun openWeb(url: String) {
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        } catch (e: Exception) {
-            status.text = "Unable to open the website."
-        }
+private fun matchWrap(): LinearLayout.LayoutParams =
+    LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.WRAP_CONTENT
+    )
+
+private fun rounded(color: Int) = GradientDrawable().apply {
+    setColor(color)
+    cornerRadius = 24f
+}
+
+override fun onDestroy() {
+    if (::tts.isInitialized) {
+        tts.stop()
+        tts.shutdown()
     }
-
-    private fun matchWrap(): LinearLayout.LayoutParams =
-        LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-
-    private fun rounded(color: Int) = GradientDrawable().apply {
-        setColor(color)
-        cornerRadius = 24f
-    }
-
-    override fun onDestroy() {
-        if (::tts.isInitialized) {
-            tts.stop()
-            tts.shutdown()
-        }
-        super.onDestroy()
-    }
+    super.onDestroy()
+}
 }
