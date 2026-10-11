@@ -1,7 +1,3 @@
-<uses-permission android:name="android.permission.INTERNET" />
-<uses-permission android:name="android.permission.RECORD_AUDIO" />
-    package com.example.myapp
-
 import android.Manifest
 import android.app.Activity
 import android.os.Bundle
