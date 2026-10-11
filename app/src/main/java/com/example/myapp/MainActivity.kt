@@ -11,7 +11,8 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.widget.*
-import android.net.Uriu
+import android.net.Uri
+import android.provider.ContactsContract
 import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import java.util.Locale
@@ -20,8 +21,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var status: TextView
     private lateinit var input: EditText
-    private lateinit var tts: TextToSpeech
-    private var ttsReady = false
+    private var tts: TextToSpeech? = null
 
     private val voiceLauncher =
         registerForActivityResult(
@@ -33,9 +33,40 @@ class MainActivity : AppCompatActivity() {
                 )
                 if (!words.isNullOrEmpty()) {
                     input.setText(words[0])
-                    answer(words[0])
+                    runCommand(words[0])
                 } else {
-                    status.text = "I couldn't hear that. Try again."
+                    say("Please try speaking again.")
+                }
+            }
+        }
+
+    private val contactLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+            if (result.resultCode == RESULT_OK) {
+                val uri = result.data?.data
+                if (uri != null) {
+                    val cursor = contentResolver.query(
+                        uri,
+                        arrayOf(
+                            ContactsContract.CommonDataKinds.Phone.NUMBER
+                        ),
+                        null, null, null
+                    )
+                    cursor?.use {
+                        if (it.moveToFirst()) {
+                            val number = it.getString(0)
+                            val dialIntent = Intent(
+                                Intent.ACTION_DIAL,
+                                Uri.parse("tel:$number")
+                            )
+                            startActivity(dialIntent)
+                            say("Please confirm the call.")
+                        } else {
+                            say("No phone number found.")
+                        }
+                    }
                 }
             }
         }
@@ -44,8 +75,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         tts = TextToSpeech(this) { result ->
-            ttsReady = result == TextToSpeech.SUCCESS
-            if (ttsReady) tts.language = Locale("en", "IN")
+            if (result == TextToSpeech.SUCCESS) {
+                tts?.language = Locale("en", "IN")
+            }
         }
 
         window.statusBarColor = Color.rgb(7, 20, 38)
@@ -62,39 +94,22 @@ class MainActivity : AppCompatActivity() {
             text = "VINIKET AI"
             textSize = 30f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.rgb(85, 230, 255))
             gravity = Gravity.CENTER
+            setTextColor(Color.rgb(85, 230, 255))
         }
         root.addView(title, matchWrap())
 
-        val subtitle = TextView(this).apply {
-            text = "YOUR PERSONAL VOICE ASSISTANT"
-            textSize = 12f
-            gravity = Gravity.CENTER
-            setTextColor(Color.LTGRAY)
-            setPadding(0, 8, 0, 28)
-        }
-        root.addView(subtitle, matchWrap())
-
-        val orb = TextView(this).apply {
-            text = "◉"
-            textSize = 76f
-            gravity = Gravity.CENTER
-            setTextColor(Color.rgb(53, 217, 255))
-        }
-        root.addView(orb, matchWrap())
-
         status = TextView(this).apply {
-            text = "Ready! Tap the microphone and speak."
+            text = "Ready! Tap and speak."
             textSize = 16f
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
-            setPadding(0, 20, 0, 20)
+            setPadding(0, 24, 0, 24)
         }
         root.addView(status, matchWrap())
 
         input = EditText(this).apply {
-            hint = "Type your question..."
+            hint = "Type a command..."
             textSize = 16f
             setTextColor(Color.WHITE)
             setHintTextColor(Color.LTGRAY)
@@ -104,118 +119,203 @@ class MainActivity : AppCompatActivity() {
         root.addView(input, matchWrap())
 
         val talk = Button(this).apply {
-            text = "🎙  TALK TO VINIKET"
+            text = "TALK TO VINIKET"
             textSize = 16f
-            setTextColor(Color.WHITE)
-            background = rounded(Color.rgb(23, 106, 145))
             setOnClickListener { listen() }
         }
-        val talkParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        talkParams.setMargins(0, 16, 0, 8)
-        root.addView(talk, talkParams)
+        root.addView(talk, matchWrap())
 
         val send = Button(this).apply {
-            text = "SEND QUESTION"
+            text = "RUN COMMAND"
             setOnClickListener {
-                val question = input.text.toString().trim()
-                if (question.isNotEmpty()) answer(question)
+                val command = input.text.toString().trim()
+                if (command.isNotEmpty()) runCommand(command)
             }
         }
         root.addView(send, matchWrap())
 
         setContentView(root)
     }
-
+    
     private fun listen() {
         try {
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            val intent = Intent(
+                RecognizerIntent.ACTION_RECOGNIZE_SPEECH
+            ).apply {
                 putExtra(
                     RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                     RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
                 )
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
-                putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to VINIKET AI")
+                putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE,
+                    "hi-IN"
+                )
+                putExtra(
+                    RecognizerIntent.EXTRA_PROMPT,
+                    "Speak to VINIKET AI"
+                )
             }
             voiceLauncher.launch(intent)
         } catch (e: Exception) {
-            status.text = "Voice recognition is unavailable on this phone."
+            say("Voice recognition is unavailable.")
         }
     }
 
-    private fun answer(text: String) {
-        val q = text.lowercase(Locale.ROOT)
-        val reply = when {
-            "hello" in q || "hi" in q ->
-                "Hello! I am VINIKET AI. How can I help you?"
+    private fun runCommand(command: String) {
+        val q = command.lowercase(Locale.ROOT)
 
-            "your name" in q || "w
-            ho are you" in q ->
-    "I am VINIKET AI, your personal voice assistant."
+        when {
+            q.contains("call ") ||
+            q.startsWith("call") ||
+            q.contains("phone lagao") ||
+            q.contains("call karo") -> {
+                val intent = Intent(
+                    Intent.ACTION_PICK,
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+                )
+                contactLauncher.launch(intent)
+                say("Choose the contact to call.")
+            }
 
-"time" in q ->
-    "The time is " +
-        java.text.SimpleDateFormat(
-            "h:mm a", Locale.getDefault()
-        ).format(java.util.Date())
+            q.contains("bluetooth") -> {
+                try {
+                    startActivity(
+                        Intent(
+                            android.provider.Settings
+                                .ACTION_BLUETOOTH_SETTINGS
+                        )
+                    )
+                    say("Opening Bluetooth settings.")
+                } catch (e: Exception) {
+                    say("Unable to open Bluetooth settings.")
+                }
+            }
 
-"date" in q ->
-    "Today is " +
-        java.text.SimpleDateFormat(
-            "EEEE, d MMMM yyyy", Locale.getDefault()
-        ).format(java.util.Date())
+            q.contains("settings") ||
+            q.contains("setting") ||
+            q.contains("settings kholo") -> {
+                startActivity(
+                    Intent(android.provider.Settings.ACTION_SETTINGS)
+                )
+                say("Opening settings.")
+            }
 
-"open youtube" in q -> {
-    openWeb("https://www.youtube.com")
-    "Opening YouTube."
-}
+            q.contains("youtube") -> {
+                openApp(
+                    "com.google.android.youtube",
+                    "YouTube"
+                )
+            }
 
-"open google" in q -> {
-    openWeb("https://www.google.com")
-    "Opening Google."
-}
+            q.contains("whatsapp") -> {
+                openApp("com.whatsapp", "WhatsApp")
+            }
 
-else -> {
-    status.text = "Searching the web for: $text"
-    openWeb(
-        "https://www.google.com/search?q=" + Uri.encode(text)
-    )
-    "I am searching the web for your question."
-}
-}
+            q.contains("google kholo") ||
+            q.contains("open google") -> {
+                openWeb(
+                    "https://www.google.com",
+                    "Opening Google."
+                )
+            }
 
-status.text = reply
-if (ttsReady) {
-    tts.speak(reply, TextToSpeech.QUEUE_FLUSH, null, "viniket_reply")
-}
-}
+            q.contains("search") ||
+            q.contains("khojo") ||
+            q.contains("dhundo") ||
+            q.contains("google par") -> {
+                val query = q
+                    .replace("google par", "")
+                    .replace("google pe", "")
+                    .replace("search", "")
+                    .replace("khojo", "")
+                    .replace("dhundo", "")
+                    .trim()
 
-private fun openWeb(url: String) {
-    try {
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-    } catch (e: Exception) {
-        status.text = "Unable to open the website."
+                openWeb(
+                    "https://www.google.com/search?q=" +
+                        Uri.encode(query.ifBlank { command }),
+                    "Searching Google."
+                )
+            }
+
+            q.contains("time") ||
+            q.contains("samay") ||
+            q.contains("kitne baje") -> {
+                val time = java.text.SimpleDateFormat(
+                    "h:mm a", Locale.getDefault()
+                ).format(java.util.Date())
+                say("The time is $time")
+            }
+
+            q.contains("date") ||
+            q.contains("tarikh") -> {
+                val date = java.text.SimpleDateFormat(
+                    "d MMMM yyyy", Locale.getDefault()
+                ).format(java.util.Date())
+                say("Today's date is $date")
+            }
+
+            else -> {
+                openWeb(
+                    "https://www.google.com/search?q=" +
+                        Uri.encode(command),
+                    "Searching Google."
+                )
+            }
+        }
     }
-}
 
-private fun matchWrap(): LinearLayout.LayoutParams =
-    LinearLayout.LayoutParams(
-        ViewGroup.LayoutParams.MATCH_PARENT,
-        ViewGroup.LayoutParams.WRAP_CONTENT
-    )
+    private fun openApp(
+        packageName: String,
+        appName: String
+    ) {
+        val intent =
+            packageManager.getLaunchIntentForPackage(packageName)
 
-private fun rounded(color: Int) = GradientDrawable().apply {
-    setColor(color)
-    cornerRadius = 24f
-}
-
-override fun onDestroy() {
-    if (::tts.isInitialized) {
-        tts.stop()
-        tts.shutdown()
+        if (intent != null) {
+            startActivity(intent)
+            say("Opening $appName.")
+        } else {
+            say("$appName is not installed.")
+        }
     }
-    super.onDestroy()
-}
+    
+    private fun openWeb(url: String, message: String) {
+        try {
+            startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            )
+            say(message)
+        } catch (e: Exception) {
+            say("Unable to open this page.")
+        }
+    }
+
+    private fun say(message: String) {
+        status.text = message
+        tts?.speak(
+            message,
+            TextToSpeech.QUEUE_FLUSH,
+            null,
+            "viniket_reply"
+        )
+    }
+
+    private fun matchWrap(): LinearLayout.LayoutParams {
+        return LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+    }
+
+    private fun rounded(color: Int) = GradientDrawable().apply {
+        setColor(color)
+        cornerRadius = 24f
+    }
+
+    override fun onDestroy() {
+        tts?.stop()
+        tts?.shutdown()
+        super.onDestroy()
+    }
 }
