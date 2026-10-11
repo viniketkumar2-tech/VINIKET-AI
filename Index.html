@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Pocket Assistant</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: #0f172a; color: #f8fafc; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    
+    header { padding: 16px; background: #1e293b; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; }
+    header h1 { font-size: 1.1rem; color: #38bdf8; }
+    #apiBtn { background: #334155; border: none; color: #cbd5e1; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
+
+    #chatBox { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .msg { max-width: 80%; padding: 10px 14px; border-radius: 14px; font-size: 0.95rem; line-height: 1.4; word-break: break-word; }
+    .user { align-self: flex-end; background: #0284c7; color: white; border-bottom-right-radius: 2px; }
+    .assistant { align-self: flex-start; background: #334155; color: #f1f5f9; border-bottom-left-radius: 2px; }
+
+    #controls { padding: 16px; background: #1e293b; display: flex; align-items: center; gap: 10px; border-top: 1px solid #334155; }
+    #micBtn {
+      width: 56px; height: 56px; border-radius: 50%; border: none; background: #38bdf8;
+      color: #0f172a; font-size: 1.4rem; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: transform 0.2s, background 0.2s; flex-shrink: 0;
+    }
+    #micBtn.listening { background: #ef4444; animation: pulse 1.2s infinite; color: white; }
+    
+    #statusText { font-size: 0.85rem; color: #94a3b8; flex: 1; }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Pocket Assistant</h1>
+    <button id="apiBtn" onclick="setupKey()">Set API Key</button>
+  </header>
+
+  <div id="chatBox">
+    <div class="msg assistant">Namaste! Mic button daba kar baat karein.</div>
+  </div>
+
+  <div id="controls">
+    <button id="micBtn" onclick="toggleListening()">🎤</button>
+    <div id="statusText">Tap mic to speak...</div>
+  </div>
+
+  <script>
+    const chatBox = document.getElementById("chatBox");
+    const micBtn = document.getElementById("micBtn");
+    const statusText = document.getElementById("statusText");
+
+    let apiKey = localStorage.getItem("groq_key") || "";
+    let isListening = false;
+
+    function setupKey() {
+      const key = prompt("Enter your Groq API Key (Free on console.groq.com):", apiKey);
+      if (key !== null) {
+        apiKey = key.trim();
+        localStorage.setItem("groq_key", apiKey);
+        alert("API Key saved locally on your phone!");
+      }
+    }
+
+    function appendMessage(role, text) {
+      const msg = document.createElement("div");
+      msg.className = `msg ${role}`;
+      msg.innerText = text;
+      chatBox.appendChild(msg);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    // Text to Speech
+    function speakText(text) {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "hi-IN"; // Hindi/Hinglish accent support
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // Speech to Text (Web Speech API)
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.lang = "hi-IN"; // Hindi aur English dono catch karta hai
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        isListening = true;
+        micBtn.classList.add("listening");
+        statusText.innerText = "Listening...";
+      };
+
+      recognition.onresult = async (event) => {
+        const transcript = event.results[0][0].transcript;
+        appendMessage("user", transcript);
+        statusText.innerText = "Thinking...";
+        await getAIResponse(transcript);
+      };
+
+      recognition.onerror = (e) => {
+        console.error(e);
+        statusText.innerText = "Error capturing voice. Try again.";
+        stopListening();
+      };
+
+      recognition.onend = () => {
+        stopListening();
+      };
+    } else {
+      statusText.innerText = "Speech API not supported in this browser. Use Chrome.";
+    }
+
+    function toggleListening() {
+      if (!recognition) return alert("Please open in Google Chrome on your phone.");
+      if (!apiKey) {
+        alert("Pehle 'Set API Key' par click karke Groq API key dalein!");
+        setupKey();
+        return;
+      }
+      if (isListening) {
+        recognition.stop();
+      } else {
+        recognition.start();
+      }
+    }
+
+    function stopListening() {
+      isListening = false;
+      micBtn.classList.remove("listening");
+      statusText.innerText = "Tap mic to speak...";
+    }
+
+    // Brain: Groq Cloud API (Free & ultra-fast)
+    async function getAIResponse(promptText) {
+      try {
+        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: "llama-3.1-8b-instant",
+            messages: [
+              {
+                role: "system",
+                content: "You are a witty, smart personal voice assistant like Google Assistant. Answer concisely in natural Hinglish or Hindi. Keep spoken responses short (1-3 sentences) so they sound good when read out loud."
+              },
+              { role: "user", content: promptText }
+            ]
+          })
+        });
+
+        const data = await res.json();
+        const reply = data.choices[0].message.content;
+        appendMessage("assistant", reply);
+        speakText(reply);
+      } catch (err) {
+        console.error(err);
+        appendMessage("assistant", "API request fail ho gaya. Key check karein.");
+      }
+    }
+  </script>
+</body>
+    </html>
+    
